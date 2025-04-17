@@ -1,5 +1,5 @@
-from .mpu6050 import MPU6050
-from .gps import GPS
+from .accel_gyro_mpu_6050 import MPU6050
+from .gps_l76g import GPS
 from app.config import CONFIG
 
 def get_enabled_sensors():
