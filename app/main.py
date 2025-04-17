@@ -1,39 +1,49 @@
-from threading import Thread
+import threading
 import time
 from .config import CONFIG
 from .sensors.sensor_factory import get_enabled_sensors
 from .services.csv_logger import log_to_csv
+from app.utils.logger import log  # jeśli używasz naszego loggera
 
 if CONFIG["USE_FLASK"]:
     from app.server.socket_server import emit_data, run_socketio
 
-def sensor_loop():
-    sensors = get_enabled_sensors()
+shared_data = {}
+data_lock = threading.Lock()
 
+def sensor_worker(sensor):
+    sensor_name = sensor.__class__.__name__
     while True:
-        combined_data = {}
-        for sensor in sensors:
+        try:
             data = sensor.read()
             if data:
-                combined_data.update(data)
-
-        log_to_csv(combined_data)
-
-        if CONFIG["USE_FLASK"]:
-            emit_data(combined_data)
-
+                with data_lock:
+                    shared_data.update(data)
+        except Exception as e:
+            log(f"Błąd w sensorze {sensor_name}: {e}", level="ERROR")
         time.sleep(CONFIG["SENSOR_DELAY"])
 
+def emit_loop():
+    while True:
+        time.sleep(CONFIG["SENSOR_DELAY"])
+        with data_lock:
+            data_copy = shared_data.copy()
+
+        if data_copy:
+            log_to_csv(data_copy)
+            if CONFIG["USE_FLASK"]:
+                emit_data(data_copy)
+
 if __name__ == "__main__":
-    Thread(target=sensor_loop, daemon=True).start()
+    sensors = get_enabled_sensors()
 
-    print(CONFIG)
+    for sensor in sensors:
+        threading.Thread(target=sensor_worker, args=(sensor,), daemon=True).start()
 
-    if CONFIG["USE_KIVY"]:
-        from app.ui.kivy_app import start_kivy, update_sensor_data_loop
-        Thread(target=update_sensor_data_loop, daemon=True).start()
-        start_kivy()
-    elif CONFIG["USE_FLASK"]:
+    threading.Thread(target=emit_loop, daemon=True).start()
+
+    # Startuj socketio jeśli trzeba
+    if CONFIG["USE_FLASK"]:
         run_socketio()
     else:
         while True:
