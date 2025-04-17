@@ -27,5 +27,5 @@ def emit_data(data):
         socketio.emit("sensor_data", data)
 
 def run_socketio():
-    log("FLASK:" + port)
+    log("FLASK:" + (str)port)
     socketio.run(app, host="0.0.0.0", port=port)
