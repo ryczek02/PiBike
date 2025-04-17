@@ -34,7 +34,6 @@ class GPS(BaseSensor):
                         except pynmea2.ParseError:
                             continue
             except Exception as e:
-                print("[GPS] Error:", e)
                 if self.ser:
                     try:
                         self.ser.close()
