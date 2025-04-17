@@ -7,7 +7,6 @@ from app.config import CONFIG
 from threading import Thread
 import time
 
-# Zmienna globalna do odbioru danych
 sensor_data = {}
 
 class SensorScreen(BoxLayout):

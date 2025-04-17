@@ -6,3 +6,4 @@ pyserial
 pynmea2
 python-dotenv
 pytz
+kivy
