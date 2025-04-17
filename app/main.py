@@ -1,4 +1,4 @@
-import threading
+from threading import Thread
 import time
 from .config import CONFIG
 from .sensors.sensor_factory import get_enabled_sensors
@@ -25,9 +25,13 @@ def sensor_loop():
         time.sleep(CONFIG["SENSOR_DELAY"])
 
 if __name__ == "__main__":
-    threading.Thread(target=sensor_loop, daemon=True).start()
+    Thread(target=sensor_loop, daemon=True).start()
 
-    if CONFIG["USE_FLASK"]:
+    if CONFIG["USE_KIVY"]:
+        from app.ui.kivy_app import start_kivy, update_sensor_data_loop
+        Thread(target=update_sensor_data_loop, daemon=True).start()
+        start_kivy()
+    elif CONFIG["USE_FLASK"]:
         run_socketio()
     else:
         while True:
