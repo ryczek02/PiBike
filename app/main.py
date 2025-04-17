@@ -3,7 +3,7 @@ import time
 from .config import CONFIG
 from .sensors.sensor_factory import get_enabled_sensors
 from .services.csv_logger import log_to_csv
-from app.utils.logger import log  # jeśli używasz naszego loggera
+from app.utils.logger import log 
 
 if CONFIG["USE_FLASK"]:
     from app.server.socket_server import emit_data, run_socketio
@@ -42,7 +42,6 @@ if __name__ == "__main__":
 
     threading.Thread(target=emit_loop, daemon=True).start()
 
-    # Startuj socketio jeśli trzeba
     if CONFIG["USE_FLASK"]:
         run_socketio()
     else:
