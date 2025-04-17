@@ -1,5 +1,6 @@
 import smbus2
 from .base_sensor import BaseSensor
+from app.utils.logger import log
 
 MPU6050_ADDR = 0x68
 PWR_MGMT_1 = 0x6B
@@ -28,7 +29,7 @@ class MPU6050(BaseSensor):
         ay = self.read_word(ACCEL_XOUT_H + 2) / ACCEL_SENSITIVITY
         az = self.read_word(ACCEL_XOUT_H + 4) / ACCEL_SENSITIVITY
 
-        return {
+        sensor_data = {
             "gyro_x": gx,
             "gyro_y": gy,
             "gyro_z": gz,
@@ -36,3 +37,7 @@ class MPU6050(BaseSensor):
             "accel_y": ay,
             "accel_z": az
         }
+        log("MPU_6050:")
+        log(sensor_data)
+
+        return sensor_data

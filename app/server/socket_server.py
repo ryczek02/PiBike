@@ -2,10 +2,13 @@ import eventlet
 eventlet.monkey_patch()
 from flask import Flask
 from flask_socketio import SocketIO
+from app.utils.logger import log
 
 socketio = SocketIO(cors_allowed_origins="*")
 app = Flask(__name__)
 socketio.init_app(app)
+
+port=5000
 
 @app.route('/')
 def index():
@@ -24,4 +27,5 @@ def emit_data(data):
         socketio.emit("sensor_data", data)
 
 def run_socketio():
-    socketio.run(app, host="0.0.0.0", port=5000)
+    log("FLASK:" + port)
+    socketio.run(app, host="0.0.0.0", port=port)

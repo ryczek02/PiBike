@@ -27,6 +27,8 @@ def sensor_loop():
 if __name__ == "__main__":
     Thread(target=sensor_loop, daemon=True).start()
 
+    print(CONFIG)
+
     if CONFIG["USE_KIVY"]:
         from app.ui.kivy_app import start_kivy, update_sensor_data_loop
         Thread(target=update_sensor_data_loop, daemon=True).start()

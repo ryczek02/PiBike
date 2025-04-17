@@ -3,6 +3,8 @@ import pynmea2
 from .base_sensor import BaseSensor
 from app.config import CONFIG
 import time
+from app.utils.logger import log
+
 
 class GPS(BaseSensor):
     def __init__(self):
@@ -20,15 +22,19 @@ class GPS(BaseSensor):
                     if decoded.startswith('$GNGGA'):
                         try:
                             msg = pynmea2.parse(decoded)
-                            return {
+                            gps_data = {
                                 "gps_lat": msg.latitude,
                                 "gps_lon": msg.longitude,
                                 "gps_time": msg.timestamp.strftime("%H:%M:%S")
                             }
+                            log("LC76G:")
+                            log(gps_data)
+                            
+                            return gps_data
                         except pynmea2.ParseError:
                             continue
             except Exception as e:
-                print("[GPS] Błąd GPS:", e)
+                print("[GPS] Error:", e)
                 if self.ser:
                     try:
                         self.ser.close()
