@@ -7,3 +7,6 @@ pynmea2
 python-dotenv
 pytz
 kivy
+pytest
+pytest-mock
+coverage

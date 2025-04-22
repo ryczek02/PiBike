@@ -41,6 +41,10 @@ if __name__ == "__main__":
         threading.Thread(target=sensor_worker, args=(sensor,), daemon=True).start()
 
     threading.Thread(target=emit_loop, daemon=True).start()
+            
+    if CONFIG["USE_KIVY"] and CONFIG["USE_GPS"]:
+        from app.ui.gps_ui import GPSApp
+        GPSApp().run()
 
     if CONFIG["USE_FLASK"]:
         run_socketio()

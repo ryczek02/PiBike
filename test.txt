@@ -1,0 +1,287 @@
+>>> app/server/socket_server.py
+import eventlet
+eventlet.monkey_patch()
+from flask import Flask
+from flask_socketio import SocketIO
+from app.utils.logger import log
+
+socketio = SocketIO(cors_allowed_origins="*")
+app = Flask(__name__)
+socketio.init_app(app)
+
+port=5000
+
+@app.route('/')
+def index():
+    return "Sensor WebSocket Server"
+
+@socketio.on('connect')
+def on_connect():
+    print("✅ Klient połączony")
+
+@socketio.on('disconnect')
+def on_disconnect():
+    print("❌ Klient rozłączony")
+
+def emit_data(data):
+    with app.app_context():
+        socketio.emit("sensor_data", data)
+
+def run_socketio():
+    log("FLASK:" + str(port))
+    socketio.run(app, host="0.0.0.0", port=port)
+
+>>> app/.pytest_cache/CACHEDIR.TAG
+Signature: 8a477f597d28d172789f06886806bc55
+# This file is a cache directory tag created by pytest.
+# For information about cache directory tags, see:
+#	https://bford.info/cachedir/spec.html
+
+>>> app/.pytest_cache/v/cache/stepwise
+[]
+>>> app/.pytest_cache/v/cache/nodeids
+[]
+>>> app/.pytest_cache/v/cache/lastfailed
+{
+  "tests/test_csv_logger.py": true,
+  "tests/test_gps.py": true,
+  "tests/test_main_threading.py": true,
+  "tests/test_mpu6050.py": true,
+  "tests/test_sensor_factory.py": true
+}
+>>> app/.pytest_cache/.gitignore
+# Created by pytest automatically.
+*
+
+>>> app/.pytest_cache/README.md
+# pytest cache directory #
+
+This directory contains data from the pytest's cache plugin,
+which provides the `--lf` and `--ff` options, as well as the `cache` fixture.
+
+**Do not** commit this to version control.
+
+See [the docs](https://docs.pytest.org/en/stable/how-to/cache.html) for more information.
+
+>>> app/sensors/sensor_factory.py
+from .accel_gyro_mpu_6050 import MPU6050
+from .gps_l76g import GPS
+from app.config import CONFIG
+
+def get_enabled_sensors():
+    sensors = []
+    mpu = MPU6050()
+
+    if CONFIG["USE_GYRO"] or CONFIG["USE_ACCEL"]:
+        sensors.append(mpu)
+    if CONFIG["USE_GPS"]:
+        sensors.append(GPS())
+
+    return sensors
+
+>>> app/sensors/base_sensor.py
+from abc import ABC, abstractmethod
+
+class BaseSensor(ABC):
+    @abstractmethod
+    def read(self) -> dict:
+        pass
+
+>>> app/sensors/accel_gyro_mpu_6050.py
+import smbus2
+from .base_sensor import BaseSensor
+from app.utils.logger import log
+
+MPU6050_ADDR = 0x68
+PWR_MGMT_1 = 0x6B
+GYRO_XOUT_H = 0x43
+ACCEL_XOUT_H = 0x3B
+
+GYRO_SENSITIVITY = 131.0
+ACCEL_SENSITIVITY = 16384.0
+
+class MPU6050(BaseSensor):
+    def __init__(self):
+        self.bus = smbus2.SMBus(1)
+        self.bus.write_byte_data(MPU6050_ADDR, PWR_MGMT_1, 0)
+
+    def read_word(self, reg):
+        high = self.bus.read_byte_data(MPU6050_ADDR, reg)
+        low = self.bus.read_byte_data(MPU6050_ADDR, reg + 1)
+        value = (high << 8) + low
+        return value - 65536 if value >= 0x8000 else value
+
+    def read(self):
+        gx = self.read_word(GYRO_XOUT_H) / GYRO_SENSITIVITY
+        gy = self.read_word(GYRO_XOUT_H + 2) / GYRO_SENSITIVITY
+        gz = self.read_word(GYRO_XOUT_H + 4) / GYRO_SENSITIVITY
+        ax = self.read_word(ACCEL_XOUT_H) / ACCEL_SENSITIVITY
+        ay = self.read_word(ACCEL_XOUT_H + 2) / ACCEL_SENSITIVITY
+        az = self.read_word(ACCEL_XOUT_H + 4) / ACCEL_SENSITIVITY
+
+        sensor_data = {
+            "gyro_x": gx,
+            "gyro_y": gy,
+            "gyro_z": gz,
+            "accel_x": ax,
+            "accel_y": ay,
+            "accel_z": az
+        }
+        log("MPU_6050:")
+        log(sensor_data)
+
+        return sensor_data
+
+>>> app/sensors/gps_l76g.py
+import serial
+import pynmea2
+from .base_sensor import BaseSensor
+from app.config import CONFIG
+import time
+from app.utils.logger import log
+
+
+class GPS(BaseSensor):
+    def __init__(self):
+        self.ser = None
+
+    def read(self):
+        while True:
+            try:
+                if self.ser is None or not self.ser.is_open:
+                    self.ser = serial.Serial(CONFIG["SERIAL_PORT"], CONFIG["BAUD_RATE"], timeout=None)
+
+                line = self.ser.readline()
+                if line:
+                    decoded = line.decode('ascii', errors='replace').strip()
+                    if decoded.startswith('$GNGGA'):
+                        try:
+                            msg = pynmea2.parse(decoded)
+                            gps_data = {
+                                "gps_lat": msg.latitude,
+                                "gps_lon": msg.longitude,
+                                "gps_time": msg.timestamp.strftime("%H:%M:%S")
+                            }
+                            log("LC76G:")
+                            log(gps_data)
+                            
+                            return gps_data
+                        except pynmea2.ParseError:
+                            continue
+            except Exception as e:
+                if self.ser:
+                    try:
+                        self.ser.close()
+                    except:
+                        pass
+                self.ser = None
+                time.sleep(2)
+
+>>> app/utils/logger.py
+from datetime import datetime
+
+LEVELS = {
+    "INFO": "[i]",
+    "DEBUG": "[d]",
+    "WARNING": "[w]",
+    "ERROR": "[e]",
+    "SUCCESS": "[s]"
+}
+
+def log(message, level="INFO"):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    icon = LEVELS.get(level.upper(), "")
+    print(f"[{timestamp}] [{level.upper()}] {icon} {message}")
+
+>>> app/main.py
+import threading
+import time
+from .config import CONFIG
+from .sensors.sensor_factory import get_enabled_sensors
+from .services.csv_logger import log_to_csv
+from app.utils.logger import log 
+
+if CONFIG["USE_FLASK"]:
+    from app.server.socket_server import emit_data, run_socketio
+
+shared_data = {}
+data_lock = threading.Lock()
+
+def sensor_worker(sensor):
+    sensor_name = sensor.__class__.__name__
+    while True:
+        try:
+            data = sensor.read()
+            if data:
+                with data_lock:
+                    shared_data.update(data)
+        except Exception as e:
+            log(f"Błąd w sensorze {sensor_name}: {e}", level="ERROR")
+        time.sleep(CONFIG["SENSOR_DELAY"])
+
+def emit_loop():
+    while True:
+        time.sleep(CONFIG["SENSOR_DELAY"])
+        with data_lock:
+            data_copy = shared_data.copy()
+
+        if data_copy:
+            log_to_csv(data_copy)
+            if CONFIG["USE_FLASK"]:
+                emit_data(data_copy)
+
+if __name__ == "__main__":
+    sensors = get_enabled_sensors()
+
+    for sensor in sensors:
+        threading.Thread(target=sensor_worker, args=(sensor,), daemon=True).start()
+
+    threading.Thread(target=emit_loop, daemon=True).start()
+
+    if CONFIG["USE_FLASK"]:
+        run_socketio()
+    else:
+        while True:
+            time.sleep(1)
+
+>>> app/config.py
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+CONFIG = {
+    "USE_FLASK": os.getenv("USE_FLASK", "false").lower() == "true",
+    "USE_GYRO": os.getenv("USE_GYRO", "false").lower() == "true",
+    "USE_ACCEL": os.getenv("USE_ACCEL", "false").lower() == "true",
+    "USE_GPS": os.getenv("USE_GPS", "false").lower() == "true",
+    "USE_KIVY": os.getenv("USE_KIVY", "false").lower() == "true",
+    "SENSOR_DELAY": float(os.getenv("SENSOR_DELAY", "0.1")),
+    "SERIAL_PORT": os.getenv("SERIAL_PORT", "/dev/ttyS0"),
+    "BAUD_RATE": int(os.getenv("BAUD_RATE", "115200")),
+    "TIMEZONE": os.getenv("TIMEZONE", "UTC"),
+    
+}
+
+>>> app/services/csv_logger.py
+import csv
+from datetime import datetime
+import os
+import pytz
+from app.config import CONFIG 
+
+timezone = pytz.timezone(CONFIG["TIMEZONE"])
+start_time = datetime.now(timezone).strftime('%Y-%m-%d_%H-%M-%S')
+csv_filepath = os.path.join(os.getcwd(), f"logs/sensor_log_{start_time}.csv")
+
+with open(csv_filepath, 'w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(['timestamp', 'gyro_x', 'gyro_y', 'gyro_z', 'accel_x', 'accel_y', 'accel_z', 'gps_lat', 'gps_lon', 'gps_time'])
+
+def log_to_csv(data):
+    with open(csv_filepath, 'a', newline='') as file:
+        writer = csv.writer(file)
+        row = [datetime.now(timezone).strftime('%Y-%m-%d %H:%M:%S')]
+        row += [data.get(k, None) for k in ['gyro_x','gyro_y','gyro_z','accel_x','accel_y','accel_z','gps_lat','gps_lon','gps_time']]
+        writer.writerow(row)
+
